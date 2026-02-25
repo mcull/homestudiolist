@@ -29,7 +29,10 @@ let cache = { data: null, expiresAt: 0 };
 function parseLocation(raw) {
   if (!raw) return { state: null, subregion: null, featured: false, curator_edits: [] };
 
-  const tokens = raw.split(',').map(t => t.trim()).filter(Boolean);
+  // Airtable may return this as an array or a comma-separated string
+  const tokens = Array.isArray(raw)
+    ? raw.map(t => t.trim()).filter(Boolean)
+    : String(raw).split(',').map(t => t.trim()).filter(Boolean);
   let state = null;
   let subregion = null;
   let featured = false;
@@ -52,12 +55,14 @@ function parseLocation(raw) {
 }
 
 /**
- * Splits a comma-separated multi-value string into a clean array.
- * Handles trailing commas and extra whitespace.
+ * Splits a multi-value field into a clean array.
+ * Handles both Airtable API arrays (multi-select fields) and
+ * comma-separated strings (as seen in CSV exports).
  */
 function splitCSV(raw) {
   if (!raw) return [];
-  return raw.split(',').map(s => s.trim()).filter(Boolean);
+  if (Array.isArray(raw)) return raw.map(s => String(s).trim()).filter(Boolean);
+  return String(raw).split(',').map(s => s.trim()).filter(Boolean);
 }
 
 /**
