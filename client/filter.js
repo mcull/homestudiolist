@@ -9,15 +9,14 @@
     apiUrl: null,
     blogListSelector: '.BlogList',   // Squarespace blog list to hide
     insertBefore: '.BlogList',       // where to insert our grid
+    requirePreviewFlag: false,       // set true to only run when ?new=1 is in the URL
     filters: [
-      { key: 'state',            label: 'Location',          type: 'select' },
-      { key: 'price_tier',       label: 'Price',             type: 'select' },
-      { key: 'rooms',            label: 'Rooms',             type: 'select' },
-      { key: 'availability',     label: 'Availability',      type: 'select' },
-      { key: 'light_rating',     label: 'Natural Light',     type: 'select' },
-      { key: 'parking',          label: 'Parking',           type: 'select' },
-      { key: 'pets',             label: 'Pets on Property',  type: 'select' },
+      // Matches existing filter bar order (minus Country)
+      { key: 'state',            label: 'State',             type: 'select' },
+      { key: 'city',             label: 'City',              type: 'select' },
       { key: 'boudoir_friendly', label: 'Boudoir Friendly',  type: 'toggle' },
+      { key: 'min_hours',        label: 'Min. Duration',     type: 'select' },
+      { key: 'price_tier',       label: 'Listing Price',     type: 'select' },
     ],
   };
 
@@ -240,6 +239,12 @@
   }
 
   async function init() {
+    // Feature flag: only activate when ?new=1 is present (safe live testing)
+    if (config.requirePreviewFlag) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('new') !== '1') return;
+    }
+
     if (!config.apiUrl) {
       console.warn('[HSL Filter] No apiUrl configured. Set window.HSL_FILTER_CONFIG.apiUrl.');
       return;
