@@ -1,0 +1,122 @@
+/* ============================================================
+   HSL Filter UI
+   Intentionally minimal — inherits Squarespace font/color
+   ============================================================ */
+
+#hsl-filter-ui {
+  padding: 20px 0 28px;
+  margin-bottom: 8px;
+}
+
+.hsl-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.hsl-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.hsl-filter-group label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.hsl-filter-group select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: transparent;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  padding: 8px 28px 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  min-width: 140px;
+}
+
+.hsl-filter-group select:focus {
+  outline: 1px solid currentColor;
+  outline-offset: 1px;
+}
+
+/* Toggle (boudoir friendly) */
+.hsl-toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.hsl-toggle-wrap input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: currentColor;
+}
+
+.hsl-toggle-wrap label {
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: normal;
+  text-transform: none;
+  opacity: 1;
+  cursor: pointer;
+}
+
+/* Footer row */
+.hsl-filter-footer {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.hsl-filter-count {
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+.hsl-filter-clear {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-family: inherit;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.hsl-filter-clear:hover {
+  opacity: 1;
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .hsl-filters {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .hsl-filter-group {
+    width: 100%;
+  }
+
+  .hsl-filter-group select {
+    width: 100%;
+  }
+}
