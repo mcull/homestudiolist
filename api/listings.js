@@ -163,8 +163,13 @@ async function fetchSquarespaceImages() {
       }
     });
 
-    // Follow pagination
-    nextUrl = data.pagination?.nextPageUrl || null;
+    // Follow pagination — nextPageUrl is relative, so prepend siteUrl
+    const nextPage = data.pagination?.nextPageUrl || null;
+    if (nextPage) {
+      nextUrl = nextPage.startsWith('http') ? nextPage : `${siteUrl}${nextPage}`;
+    } else {
+      nextUrl = null;
+    }
   }
 
   return imageMap;
