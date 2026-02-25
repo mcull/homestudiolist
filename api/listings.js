@@ -148,8 +148,18 @@ async function fetchAllListings() {
 // Handler
 // ---------------------------------------------------------------------------
 
+// Allowed origins: support both www and non-www, plus the squarespace.com preview domain
+const ALLOWED_ORIGINS = [
+  process.env.ALLOWED_ORIGIN,           // e.g. https://www.homestudiolist.com
+  'https://homestudiolist.com',          // non-www
+  'https://www.homestudiolist.com',      // www
+].filter(Boolean);
+
 export default async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
+  const requestOrigin = req.headers.origin || '';
+  const allowedOrigin = ALLOWED_ORIGINS.includes(requestOrigin)
+    ? requestOrigin
+    : ALLOWED_ORIGINS[0] || '*';
 
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
