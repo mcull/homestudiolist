@@ -308,10 +308,11 @@
     const withImages = listings.filter(l => l.imageUrl).length;
     console.log(`[HSL Filter] ${listings.length} listings loaded · ${withImages} with images (${Object.keys(domImages).length} from DOM, rest from API)`);
 
-    // Create our card grid, hide Squarespace's list
+    // Create our card grid — use 'hsl-BlogList' so the Universal Filter
+    // script doesn't treat it as a second .BlogList container to attach to
     const grid = document.createElement('div');
     grid.id = 'hsl-card-grid';
-    grid.className = 'BlogList'; // inherit Squarespace's grid CSS
+    grid.className = 'hsl-BlogList';
     insertTarget.parentNode.insertBefore(grid, insertTarget);
 
     if (blogList) blogList.style.display = 'none';
