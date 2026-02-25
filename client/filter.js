@@ -279,7 +279,29 @@
     }
 
     listings = data.listings || [];
-    console.log(`[HSL Filter] ${listings.length} listings loaded`);
+
+    // Extract any image URLs already rendered in Squarespace's DOM before hiding it.
+    // Covers the first ~50 cards (featured listings); the rest fall back to imageUrl from API.
+    const domImages = {};
+    if (blogList) {
+      blogList.querySelectorAll('article.BlogList-item').forEach(card => {
+        const link = card.querySelector('a[href*="/listing/"]');
+        const img = card.querySelector('img[data-src], img[src*="squarespace-cdn"]');
+        if (!link || !img) return;
+        const m = link.getAttribute('href').match(/\/listing\/(\d+)/);
+        const src = img.getAttribute('data-src') || img.getAttribute('src');
+        if (m && src) domImages[parseInt(m[1], 10)] = src;
+      });
+    }
+
+    // Merge DOM images into listings (prefer DOM image as it's already sized for display)
+    listings = listings.map(l => ({
+      ...l,
+      imageUrl: domImages[l.id] || l.imageUrl || null,
+    }));
+
+    const withImages = listings.filter(l => l.imageUrl).length;
+    console.log(`[HSL Filter] ${listings.length} listings loaded · ${withImages} with images (${Object.keys(domImages).length} from DOM, rest from API)`);
 
     // Create our card grid, hide Squarespace's list
     const grid = document.createElement('div');

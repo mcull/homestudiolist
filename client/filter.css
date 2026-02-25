@@ -105,6 +105,21 @@
   opacity: 1;
 }
 
+/* Image placeholder for listings without a photo */
+#hsl-card-grid .BlogList-item-image:not(:has(img)) {
+  background-color: #f0ede8;
+  aspect-ratio: 4 / 5;
+  display: block;
+}
+
+/* Ensure images fill their container consistently */
+#hsl-card-grid .BlogList-item-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 /* Mobile */
 @media (max-width: 640px) {
   .hsl-filters {
