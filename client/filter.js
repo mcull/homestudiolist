@@ -10,6 +10,7 @@
     blogListSelector: '.BlogList',   // Squarespace blog list to hide
     insertBefore: '.BlogList',       // where to insert our grid
     requirePreviewFlag: false,       // set true to only run when ?new=1 is in the URL
+    pageSize: 50,
     filters: [
       // Matches existing filter bar order (minus Country)
       { key: 'state',            label: 'State',             type: 'select' },
@@ -22,6 +23,7 @@
 
   const config = Object.assign({}, DEFAULTS, window.HSL_FILTER_CONFIG || {});
   const FILTER_DEFS = config.filters;
+  const PAGE_SIZE = config.pageSize;
 
   // ---------------------------------------------------------------------------
   // State
@@ -30,6 +32,7 @@
   let listings = [];   // ordered array from API (featured first)
   let cardEls = [];    // parallel array of rendered <article> elements
   const activeFilters = {};
+  let currentPage = 1;
 
   // ---------------------------------------------------------------------------
   // Card rendering
@@ -77,7 +80,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Filtering
+  // Filtering + Pagination
   // ---------------------------------------------------------------------------
 
   function listingMatchesFilters(listing) {
@@ -94,13 +97,82 @@
   }
 
   function applyFilters() {
-    let visible = 0;
+    // Build the full filtered index list
+    const filteredIndices = [];
     listings.forEach((listing, i) => {
-      const show = listingMatchesFilters(listing);
-      cardEls[i].style.display = show ? '' : 'none';
-      if (show) visible++;
+      if (listingMatchesFilters(listing)) filteredIndices.push(i);
     });
-    updateCount(visible);
+
+    const total = filteredIndices.length;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+    // Clamp currentPage to valid range
+    if (currentPage < 1) currentPage = 1;
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const pageSet = new Set(filteredIndices.slice(start, start + PAGE_SIZE));
+
+    // Show only cards on the current page
+    cardEls.forEach((el, i) => {
+      el.style.display = pageSet.has(i) ? '' : 'none';
+    });
+
+    updateCount(total);
+    renderPagination(totalPages);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pagination UI
+  // ---------------------------------------------------------------------------
+
+  function renderPagination(totalPages) {
+    const container = document.getElementById('hsl-pagination');
+    if (!container) return;
+
+    if (totalPages <= 1) {
+      container.innerHTML = '';
+      return;
+    }
+
+    // Compute which page numbers to display
+    const show = new Set();
+    for (let i = 1; i <= Math.min(3, totalPages); i++) show.add(i);
+    for (let i = Math.max(1, totalPages - 2); i <= totalPages; i++) show.add(i);
+    for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) show.add(i);
+
+    const sorted = Array.from(show).sort((a, b) => a - b);
+
+    let html = '<nav class="hsl-pagination" aria-label="Listings pages">';
+    let prev = null;
+    for (const p of sorted) {
+      if (prev !== null && p > prev + 1) {
+        html += '<span class="hsl-page-ellipsis">&middot;&middot;&middot;&middot;&middot;</span>';
+      }
+      if (p === currentPage) {
+        html += `<span class="hsl-page-btn hsl-page-active" aria-current="page"><span>${p}</span></span>`;
+      } else {
+        html += `<button class="hsl-page-btn" data-page="${p}" type="button">${p}</button>`;
+      }
+      prev = p;
+    }
+    html += '</nav>';
+
+    container.innerHTML = html;
+
+    container.querySelectorAll('button[data-page]').forEach(btn => {
+      btn.addEventListener('click', () => setPage(parseInt(btn.dataset.page, 10)));
+    });
+  }
+
+  function setPage(page) {
+    currentPage = page;
+    applyFilters();
+    syncURL();
+
+    // Scroll to top of grid
+    const grid = document.getElementById('hsl-card-grid');
+    if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   // ---------------------------------------------------------------------------
@@ -189,6 +261,7 @@
     } else {
       activeFilters[key] = value === 'true' ? true : value;
     }
+    currentPage = 1;  // reset to first page on every filter change
     applyFilters();
     syncURL();
   }
@@ -199,6 +272,8 @@
       const val = params.get(def.key);
       if (val) activeFilters[def.key] = def.type === 'toggle' ? val === 'true' : val;
     });
+    const p = parseInt(params.get('page'), 10);
+    if (p > 0) currentPage = p;
   }
 
   function syncURL() {
@@ -206,6 +281,7 @@
     Object.entries(activeFilters).forEach(([k, v]) => {
       if (v !== null && v !== undefined) params.set(k, v);
     });
+    if (currentPage > 1) params.set('page', currentPage);
     const qs = params.toString();
     window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''));
   }
@@ -231,11 +307,19 @@
       Object.keys(activeFilters).forEach(k => delete activeFilters[k]);
       ui.querySelectorAll('select').forEach(s => (s.value = ''));
       ui.querySelectorAll('input[type=checkbox]').forEach(c => (c.checked = false));
+      currentPage = 1;
       applyFilters();
       syncURL();
     });
 
     insertTarget.parentNode.insertBefore(ui, insertTarget);
+  }
+
+  function injectPaginationContainer(afterGrid) {
+    if (document.getElementById('hsl-pagination')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'hsl-pagination';
+    afterGrid.parentNode.insertBefore(wrap, afterGrid.nextSibling);
   }
 
   async function init() {
@@ -319,10 +403,9 @@
 
     renderAllCards(grid);
     buildFilterUI();
+    injectPaginationContainer(grid);
 
-    if (Object.keys(activeFilters).length > 0) {
-      applyFilters();
-    }
+    applyFilters();
   }
 
   if (document.readyState === 'loading') {
