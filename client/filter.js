@@ -7,8 +7,8 @@
 
   const DEFAULTS = {
     apiUrl: null,
-    cardSelector: 'article.BlogList-item',
-    insertBefore: '.BlogList',
+    blogListSelector: '.BlogList',   // Squarespace blog list to hide
+    insertBefore: '.BlogList',       // where to insert our grid
     filters: [
       { key: 'state',            label: 'Location',          type: 'select' },
       { key: 'price_tier',       label: 'Price',             type: 'select' },
@@ -28,23 +28,53 @@
   // State
   // ---------------------------------------------------------------------------
 
-  let listings = [];
-  let cardMap = {};        // listingId (int) → article element
+  let listings = [];   // ordered array from API (featured first)
+  let cardEls = [];    // parallel array of rendered <article> elements
   const activeFilters = {};
 
   // ---------------------------------------------------------------------------
-  // DOM matching
+  // Card rendering
   // ---------------------------------------------------------------------------
 
-  function buildCardMap() {
-    const map = {};
-    document.querySelectorAll(config.cardSelector).forEach(card => {
-      const link = card.querySelector('a[href*="/listing/"]');
-      if (!link) return;
-      const m = link.getAttribute('href').match(/\/listing\/(\d+)/);
-      if (m) map[parseInt(m[1], 10)] = card;
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function cardTemplate(listing) {
+    const url = `/listing/${listing.id}`;
+    const imgSrc = listing.imageUrl ? `${listing.imageUrl}?format=750w` : '';
+    const imgHtml = imgSrc
+      ? `<img src="${escapeHtml(imgSrc)}" alt="${escapeHtml(listing.title)}" loading="lazy">`
+      : '';
+
+    return `
+      <div class="BlogList-item-image">
+        <a href="${escapeHtml(url)}" class="BlogList-item-image-link">
+          ${imgHtml}
+        </a>
+      </div>
+      <a href="${escapeHtml(url)}" class="BlogList-item-title">${escapeHtml(listing.title)}</a>
+      <div class="BlogList-item-excerpt">
+        <p>${escapeHtml(listing.locationDisplay || '')}</p>
+        <a href="${escapeHtml(url)}" class="BlogList-item-readmore">
+          <span>VIEW THIS SPACE</span>
+        </a>
+      </div>
+    `;
+  }
+
+  function renderAllCards(parent) {
+    cardEls = listings.map(listing => {
+      const article = document.createElement('article');
+      article.className = 'BlogList-item hentry';
+      article.innerHTML = cardTemplate(listing);
+      parent.appendChild(article);
+      return article;
     });
-    return map;
   }
 
   // ---------------------------------------------------------------------------
@@ -52,32 +82,25 @@
   // ---------------------------------------------------------------------------
 
   function listingMatchesFilters(listing) {
-    return Object.entries(activeFilters).every(([key, value]) => {
+    return FILTER_DEFS.every(def => {
+      const value = activeFilters[def.key];
       if (value === null || value === undefined || value === '') return true;
 
-      const field = listing[key];
+      const field = listing[def.key];
 
-      // Boolean toggle (boudoir_friendly)
-      if (typeof value === 'boolean') return value ? field === true : true;
-
-      // Array fields (rooms, pets, availability) — listing must contain the value
+      if (def.type === 'toggle') return value ? field === true : true;
       if (Array.isArray(field)) return field.includes(value);
-
-      // Scalar fields
       return String(field) === String(value);
     });
   }
 
   function applyFilters() {
     let visible = 0;
-
-    Object.entries(cardMap).forEach(([idStr, card]) => {
-      const listing = listings.find(l => l.id === parseInt(idStr, 10));
-      const show = !listing || listingMatchesFilters(listing);
-      card.style.display = show ? '' : 'none';
+    listings.forEach((listing, i) => {
+      const show = listingMatchesFilters(listing);
+      cardEls[i].style.display = show ? '' : 'none';
       if (show) visible++;
     });
-
     updateCount(visible);
   }
 
@@ -149,7 +172,7 @@
       filtersEl.appendChild(group);
     });
 
-    updateCount(Object.keys(cardMap).length);
+    updateCount(listings.length);
   }
 
   function updateCount(n) {
@@ -189,22 +212,11 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Filter container injection
+  // Init
   // ---------------------------------------------------------------------------
 
-  function injectContainer() {
+  function injectContainer(insertTarget) {
     if (document.getElementById('hsl-filter-ui')) return;
-
-    // Find insertion point: before .BlogList, or before the first card's parent
-    let target = document.querySelector(config.insertBefore);
-    if (!target) {
-      const firstCard = document.querySelector(config.cardSelector);
-      target = firstCard ? firstCard.parentElement : null;
-    }
-    if (!target) {
-      console.warn('[HSL Filter] Could not find insertion point. Set config.insertBefore.');
-      return;
-    }
 
     const ui = document.createElement('div');
     ui.id = 'hsl-filter-ui';
@@ -224,12 +236,8 @@
       syncURL();
     });
 
-    target.parentNode.insertBefore(ui, target);
+    insertTarget.parentNode.insertBefore(ui, insertTarget);
   }
-
-  // ---------------------------------------------------------------------------
-  // Init
-  // ---------------------------------------------------------------------------
 
   async function init() {
     if (!config.apiUrl) {
@@ -237,11 +245,19 @@
       return;
     }
 
+    // Find insertion target early so we can show loading state
+    const blogList = document.querySelector(config.blogListSelector);
+    const insertTarget = document.querySelector(config.insertBefore) || blogList;
+    if (!insertTarget) {
+      console.warn('[HSL Filter] Could not find insertion point.');
+      return;
+    }
+
     readURL();
-    injectContainer();
+    injectContainer(insertTarget);
 
     // Session cache for instant back-navigation
-    const CACHE_KEY = 'hsl_listings_v1';
+    const CACHE_KEY = 'hsl_listings_v2';
     let data = null;
 
     try {
@@ -263,18 +279,21 @@
     }
 
     listings = data.listings || [];
-    cardMap = buildCardMap();
+    console.log(`[HSL Filter] ${listings.length} listings loaded`);
 
-    const matched = Object.keys(cardMap).length;
-    const unmatched = listings.length - matched;
-    console.log(`[HSL Filter] ${listings.length} listings from API · ${matched} matched in DOM · ${unmatched} unmatched`);
+    // Create our card grid, hide Squarespace's list
+    const grid = document.createElement('div');
+    grid.id = 'hsl-card-grid';
+    grid.className = 'BlogList'; // inherit Squarespace's grid CSS
+    insertTarget.parentNode.insertBefore(grid, insertTarget);
 
+    if (blogList) blogList.style.display = 'none';
+
+    renderAllCards(grid);
     buildFilterUI();
 
     if (Object.keys(activeFilters).length > 0) {
       applyFilters();
-    } else {
-      updateCount(matched);
     }
   }
 

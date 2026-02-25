@@ -1,38 +1,31 @@
 /**
  * GET /api/listings
  *
- * Returns a filter index of all active Home Studio List listings.
- * Fetches from Airtable, normalizes field names, and caches in-memory for 15 minutes.
+ * Returns all active listings with filter attributes (from Airtable) and
+ * image URLs (from Squarespace's public JSON API), joined by ListingID.
+ * Response is cached in-memory for 15 minutes.
  */
 
 const AIRTABLE_API_URL = 'https://api.airtable.com/v0';
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
-// In-memory cache (persists across warm invocations of the same function instance)
 let cache = { data: null, expiresAt: 0 };
 
 // ---------------------------------------------------------------------------
-// Field normalization
+// Field normalization helpers
 // ---------------------------------------------------------------------------
 
 /**
  * Parses the compound "Web Filter Location" field into structured parts.
- *
- * Example input: "California, California (Southern), Curator Edit: Holiday 2025, Featured"
- * Example output: {
- *   state: "California",
- *   subregion: "California (Southern)",
- *   featured: true,
- *   curator_edits: ["Holiday 2025"]
- * }
+ * Example: "California, California (Southern), Curator Edit: Holiday 2025, Featured"
  */
 function parseLocation(raw) {
   if (!raw) return { state: null, subregion: null, featured: false, curator_edits: [] };
 
-  // Airtable may return this as an array or a comma-separated string
   const tokens = Array.isArray(raw)
     ? raw.map(t => t.trim()).filter(Boolean)
     : String(raw).split(',').map(t => t.trim()).filter(Boolean);
+
   let state = null;
   let subregion = null;
   let featured = false;
@@ -44,7 +37,6 @@ function parseLocation(raw) {
     } else if (token.startsWith('Curator Edit: ')) {
       curator_edits.push(token.replace('Curator Edit: ', '').trim());
     } else if (/\(.+\)/.test(token)) {
-      // Matches patterns like "California (Southern)"
       subregion = token;
     } else if (!state) {
       state = token;
@@ -56,8 +48,7 @@ function parseLocation(raw) {
 
 /**
  * Splits a multi-value field into a clean array.
- * Handles both Airtable API arrays (multi-select fields) and
- * comma-separated strings (as seen in CSV exports).
+ * Handles both Airtable API arrays and comma-separated strings.
  */
 function splitCSV(raw) {
   if (!raw) return [];
@@ -65,12 +56,8 @@ function splitCSV(raw) {
   return String(raw).split(',').map(s => s.trim()).filter(Boolean);
 }
 
-/**
- * Normalizes a single Airtable record into a clean listing object.
- */
 function normalizeRecord(record) {
   const f = record.fields;
-
   const { state, subregion, featured, curator_edits } = parseLocation(f['Web Filter Location']);
 
   return {
@@ -95,10 +82,10 @@ function normalizeRecord(record) {
 }
 
 // ---------------------------------------------------------------------------
-// Airtable fetcher (handles pagination)
+// Airtable fetcher
 // ---------------------------------------------------------------------------
 
-async function fetchAllListings() {
+async function fetchAirtableListings() {
   const baseId = process.env.AIRTABLE_BASE_ID;
   const tableId = process.env.AIRTABLE_TABLE_ID;
   const apiKey = process.env.AIRTABLE_API_KEY;
@@ -145,15 +132,57 @@ async function fetchAllListings() {
 }
 
 // ---------------------------------------------------------------------------
-// Handler
+// Squarespace fetcher — gets image URLs from the public blog JSON API
 // ---------------------------------------------------------------------------
 
-// Allowed origins: support both www and non-www, plus the squarespace.com preview domain
+async function fetchSquarespaceImages() {
+  const siteUrl = (process.env.SQUARESPACE_SITE_URL || 'https://www.homestudiolist.com').replace(/\/$/, '');
+  const imageMap = {}; // listingId (int) → imageUrl string
+
+  let nextUrl = `${siteUrl}/listing?format=json`;
+
+  while (nextUrl) {
+    const res = await fetch(nextUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+
+    if (!res.ok) {
+      console.warn(`Squarespace API returned ${res.status} for ${nextUrl} — skipping images`);
+      break;
+    }
+
+    const data = await res.json();
+    const items = data.items || [];
+
+    items.forEach(item => {
+      // urlId is the slug (e.g. "1067"), or extract from url field
+      const rawId = item.urlId || (item.url || '').match(/\/listing\/(\d+)/)?.[1];
+      const id = parseInt(rawId, 10);
+      if (id && item.assetUrl) {
+        imageMap[id] = item.assetUrl;
+      }
+    });
+
+    // Follow pagination
+    nextUrl = data.pagination?.nextPageUrl || null;
+  }
+
+  return imageMap;
+}
+
+// ---------------------------------------------------------------------------
+// CORS
+// ---------------------------------------------------------------------------
+
 const ALLOWED_ORIGINS = [
-  process.env.ALLOWED_ORIGIN,           // e.g. https://www.homestudiolist.com
-  'https://homestudiolist.com',          // non-www
-  'https://www.homestudiolist.com',      // www
+  process.env.ALLOWED_ORIGIN,
+  'https://homestudiolist.com',
+  'https://www.homestudiolist.com',
 ].filter(Boolean);
+
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
 
 export default async function handler(req, res) {
   const requestOrigin = req.headers.origin || '';
@@ -165,22 +194,35 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
     const now = Date.now();
 
     if (!cache.data || now > cache.expiresAt) {
-      const records = await fetchAllListings();
-      const listings = records
-        .map(normalizeRecord)
-        .filter(l => l.id !== null);
+      // Fetch both sources in parallel
+      const [airtableRecords, imageMap] = await Promise.all([
+        fetchAirtableListings(),
+        fetchSquarespaceImages(),
+      ]);
+
+      const listings = airtableRecords
+        .map(record => {
+          const listing = normalizeRecord(record);
+          return {
+            ...listing,
+            imageUrl: imageMap[listing.id] || null,
+            locationDisplay: [listing.city, listing.state].filter(Boolean).join(', '),
+          };
+        })
+        .filter(l => l.id !== null)
+        // Featured listings first, then alphabetical by title
+        .sort((a, b) => {
+          if (a.featured && !b.featured) return -1;
+          if (!a.featured && b.featured) return 1;
+          return (a.title || '').localeCompare(b.title || '');
+        });
 
       cache = {
         data: { listings, meta: { total: listings.length, generated_at: new Date().toISOString() } },
@@ -191,7 +233,7 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=60');
     return res.status(200).json(cache.data);
   } catch (err) {
-    console.error('Error fetching listings:', err);
+    console.error('Error building listings:', err);
     return res.status(500).json({ error: err.message });
   }
 }
