@@ -201,10 +201,13 @@ export default async function handler(req, res) {
     const now = Date.now();
 
     if (!cache.data || now > cache.expiresAt) {
-      // Fetch both sources in parallel
+      // Fetch both sources in parallel — image fetch is non-fatal
       const [airtableRecords, imageMap] = await Promise.all([
         fetchAirtableListings(),
-        fetchSquarespaceImages(),
+        fetchSquarespaceImages().catch(err => {
+          console.warn('Squarespace image fetch failed, continuing without images:', err.message);
+          return {};
+        }),
       ]);
 
       const listings = airtableRecords
