@@ -131,7 +131,7 @@
 
         const allOpt = document.createElement('option');
         allOpt.value = '';
-        allOpt.textContent = `All ${def.label}`;
+        allOpt.textContent = 'All';
         sel.appendChild(allOpt);
 
         getUniqueOptions(def.key).forEach(val => {
