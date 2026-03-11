@@ -1,0 +1,21 @@
+{
+  "functions": {
+    "api/listings.js": {
+      "maxDuration": 30
+    },
+    "api/images.js": {
+      "maxDuration": 15
+    }
+  },
+  "crons": [
+    { "path": "/api/listings", "schedule": "*/10 * * * *" }
+  ],
+  "headers": [
+    {
+      "source": "/client/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=60, stale-while-revalidate=3600" }
+      ]
+    }
+  ]
+}
