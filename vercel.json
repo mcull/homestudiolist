@@ -1,10 +1,15 @@
 {
   "functions": {
     "api/listings.js": {
-      "memory": 256,
       "maxDuration": 30
+    },
+    "api/images.js": {
+      "maxDuration": 15
     }
   },
+  "crons": [
+    { "path": "/api/listings", "schedule": "*/10 * * * *" }
+  ],
   "headers": [
     {
       "source": "/client/(.*)",

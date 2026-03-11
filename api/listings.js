@@ -132,47 +132,40 @@ async function fetchAirtableListings() {
 }
 
 // ---------------------------------------------------------------------------
-// Squarespace fetcher — gets image URLs from the public blog JSON API
+// Squarespace publish-order fetcher
 // ---------------------------------------------------------------------------
 
-async function fetchSquarespaceImages() {
+/**
+ * Paginates through the Squarespace listing blog to collect
+ * urlId → publishOn (ms timestamp) for every listing.
+ * Squarespace uses cursor-based pagination via nextPageUrl.
+ */
+async function fetchSquarespacePublishOrder() {
   const siteUrl = (process.env.SQUARESPACE_SITE_URL || 'https://www.homestudiolist.com').replace(/\/$/, '');
-  const imageMap = {}; // listingId (int) → imageUrl string
+  const publishMap = new Map();
 
   let nextUrl = `${siteUrl}/listing?format=json`;
 
   while (nextUrl) {
-    const res = await fetch(nextUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-
-    if (!res.ok) {
-      console.warn(`Squarespace API returned ${res.status} for ${nextUrl} — skipping images`);
+    let data;
+    try {
+      const res = await fetch(nextUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      if (!res.ok) break;
+      data = await res.json();
+    } catch {
       break;
     }
 
-    const data = await res.json();
-    const items = data.items || [];
-
-    items.forEach(item => {
-      // urlId is the slug (e.g. "1067"), or extract from url field
-      const rawId = item.urlId || (item.url || '').match(/\/listing\/(\d+)/)?.[1];
-      const id = parseInt(rawId, 10);
-      if (id && item.assetUrl) {
-        imageMap[id] = item.assetUrl;
-      }
+    (data.items || []).forEach(({ urlId, publishOn }) => {
+      const id = parseInt(urlId, 10);
+      if (id && publishOn) publishMap.set(id, publishOn);
     });
 
-    // Follow pagination — nextPageUrl is relative, so prepend siteUrl
-    const nextPage = data.pagination?.nextPageUrl || null;
-    if (nextPage) {
-      nextUrl = nextPage.startsWith('http') ? nextPage : `${siteUrl}${nextPage}`;
-    } else {
-      nextUrl = null;
-    }
+    const next = data.pagination?.nextPageUrl;
+    nextUrl = next ? `${siteUrl}${next}&format=json` : null;
   }
 
-  return imageMap;
+  return publishMap;
 }
 
 // ---------------------------------------------------------------------------
@@ -190,12 +183,7 @@ const ALLOWED_ORIGINS = [
 // ---------------------------------------------------------------------------
 
 export default async function handler(req, res) {
-  const requestOrigin = req.headers.origin || '';
-  const allowedOrigin = ALLOWED_ORIGINS.includes(requestOrigin)
-    ? requestOrigin
-    : ALLOWED_ORIGINS[0] || '*';
-
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -206,13 +194,10 @@ export default async function handler(req, res) {
     const now = Date.now();
 
     if (!cache.data || now > cache.expiresAt) {
-      // Fetch both sources in parallel — image fetch is non-fatal
-      const [airtableRecords, imageMap] = await Promise.all([
+      // Fetch Airtable data and Squarespace publish order concurrently
+      const [airtableRecords, publishMap] = await Promise.all([
         fetchAirtableListings(),
-        fetchSquarespaceImages().catch(err => {
-          console.warn('Squarespace image fetch failed, continuing without images:', err.message);
-          return {};
-        }),
+        fetchSquarespacePublishOrder(),
       ]);
 
       const listings = airtableRecords
@@ -220,17 +205,13 @@ export default async function handler(req, res) {
           const listing = normalizeRecord(record);
           return {
             ...listing,
-            imageUrl: imageMap[listing.id] || null,
             locationDisplay: [listing.city, listing.state].filter(Boolean).join(', '),
+            publish_on: publishMap.get(listing.id) || 0,
           };
         })
         .filter(l => l.id !== null)
-        // Featured listings first, then alphabetical by title
-        .sort((a, b) => {
-          if (a.featured && !b.featured) return -1;
-          if (!a.featured && b.featured) return 1;
-          return (a.title || '').localeCompare(b.title || '');
-        });
+        // Newest publish date first; listings not in Squarespace fall to the end
+        .sort((a, b) => b.publish_on - a.publish_on);
 
       cache = {
         data: { listings, meta: { total: listings.length, generated_at: new Date().toISOString() } },
@@ -238,7 +219,7 @@ export default async function handler(req, res) {
       };
     }
 
-    res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=60');
+    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
     return res.status(200).json(cache.data);
   } catch (err) {
     console.error('Error building listings:', err);

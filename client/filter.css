@@ -16,64 +16,106 @@
 }
 
 .hsl-filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   min-width: 140px;
 }
 
-.hsl-filter-group label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0.6;
-}
-
-.hsl-filter-group select {
-  appearance: none;
-  -webkit-appearance: none;
-  background-color: transparent;
-  border: 1px solid currentColor;
-  border-radius: 2px;
-  padding: 8px 28px 8px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  color: inherit;
-  cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
+/* Custom dropdown (replaces native <select> for full font control) */
+.hsl-dropdown {
+  position: relative;
   min-width: 140px;
 }
 
-.hsl-filter-group select:focus {
-  outline: 1px solid currentColor;
-  outline-offset: 1px;
-}
-
-/* Toggle (boudoir friendly) */
-.hsl-toggle-wrap {
+.hsl-dropdown-label {
   display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 8px 0;
-}
-
-.hsl-toggle-wrap input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  border-bottom: 1px solid currentColor;
+  padding: 10px;
+  background-color: #fff;
   cursor: pointer;
-  accent-color: currentColor;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: brandon-grotesque, brandon_grotesque, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  user-select: none;
+  min-width: 140px;
 }
 
-.hsl-toggle-wrap label {
-  font-size: 13px;
-  font-weight: normal;
-  letter-spacing: normal;
-  text-transform: none;
+.hsl-dropdown-label:focus {
+  outline: none;
+  border-bottom-width: 1.5px;
+}
+
+/* CSS chevron — uses currentColor so it matches the site text */
+.hsl-dropdown-label::after {
+  content: '';
+  display: inline-block;
+  flex-shrink: 0;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.6;
+  transition: transform 0.15s;
+}
+
+.hsl-dropdown--open .hsl-dropdown-label::after {
+  transform: rotate(180deg);
+}
+
+.hsl-dropdown--disabled .hsl-dropdown-label {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+.hsl-dropdown-opts {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  min-width: 100%;
+  background-color: #fff !important;
+  border: 1px solid currentColor;
+  list-style: none;
+  padding: 6px 0;
+  margin: 0;
+  z-index: 200;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.hsl-dropdown--open .hsl-dropdown-opts {
+  display: block;
+}
+
+.hsl-dropdown-opts li {
+  padding: 7px 16px;
+  font-size: 12px;
+  font-family: brandon-grotesque, brandon_grotesque, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  opacity: 0.55;
+  white-space: nowrap;
+}
+
+.hsl-dropdown-opts li:hover {
   opacity: 1;
-  cursor: pointer;
+}
+
+.hsl-dropdown-opts li[aria-selected="true"] {
+  opacity: 1;
+  font-weight: 600;
+}
+
+.hsl-dropdown-opts li.hsl-dropdown-opt--disabled {
+  opacity: 0.2;
+  cursor: default;
+  pointer-events: none;
 }
 
 /* Footer row */
@@ -120,11 +162,22 @@
   .hsl-BlogList { grid-template-columns: 1fr; }
 }
 
-/* Image placeholder for listings without a photo */
-#hsl-card-grid .BlogList-item-image:not(:has(img)) {
-  background-color: #f0ede8;
-  aspect-ratio: 4 / 5;
+/* Card */
+#hsl-card-grid .BlogList-item {
+  overflow: hidden;
+}
+
+/* Image container — consistent aspect ratio with or without photo */
+#hsl-card-grid .BlogList-item-image {
+  aspect-ratio: 4 / 3;
   display: block;
+  background-color: #f0ede8;
+}
+
+#hsl-card-grid .BlogList-item-image-link {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* Ensure images fill their container consistently */
@@ -133,6 +186,42 @@
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* Text area padding */
+#hsl-card-grid .BlogList-item-title {
+  display: block;
+  padding: 0;
+}
+
+#hsl-card-grid .BlogList-item-excerpt {
+  padding: 0 0 20px;
+}
+
+#hsl-card-grid .BlogList-item-excerpt p {
+  margin: 0 0 4px;
+}
+
+/* VIEW THIS SPACE — full-width outlined button, no arrow */
+#hsl-card-grid .BlogList-item-readmore {
+  display: block;
+  border: 1.5px solid currentColor;
+  text-align: center;
+  padding: 12px;
+  margin-top: 20px;
+  text-decoration: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+#hsl-card-grid .BlogList-item-readmore::after {
+  content: none;
+}
+
+#hsl-card-grid .BlogList-item-readmore span::after {
+  content: none;
 }
 
 /* Pagination */
@@ -207,7 +296,9 @@
     width: 100%;
   }
 
-  .hsl-filter-group select {
+  .hsl-dropdown,
+  .hsl-dropdown-label {
     width: 100%;
+    min-width: 0;
   }
 }
