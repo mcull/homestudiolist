@@ -78,6 +78,7 @@ function normalizeRecord(record) {
     rooms: splitCSV(f['Web Filter Rooms']),
     pets: splitCSV(f['Web Filter Pets']),
     availability: splitCSV(f['Availability']),
+    requests_2025: parseInt(f['2025 Requests – Submitted'], 10) || 0,
   };
 }
 
@@ -102,6 +103,7 @@ async function fetchAirtableListings() {
     'Web Filter Location', 'Web Filter Rooms', 'Web Filter Price',
     'Web Filter Boudoir Friendly', 'Web Filter Pets',
     'Web Filter Parking', 'Web Filter Max Team Size',
+    '2025 Requests – Submitted',
   ];
 
   const fieldParams = fields.map(f => `fields[]=${encodeURIComponent(f)}`).join('&');
@@ -225,10 +227,11 @@ export default async function handler(req, res) {
           };
         })
         .filter(l => l.id !== null)
-        // Featured listings first, then alphabetical by title
+        // Featured listings first, then by 2025 requests descending, then alphabetical
         .sort((a, b) => {
           if (a.featured && !b.featured) return -1;
           if (!a.featured && b.featured) return 1;
+          if (b.requests_2025 !== a.requests_2025) return b.requests_2025 - a.requests_2025;
           return (a.title || '').localeCompare(b.title || '');
         });
 
