@@ -248,7 +248,12 @@
 
   function updateCount(n) {
     const el = document.querySelector('#hsl-filter-ui .hsl-filter-count');
-    if (el) el.textContent = `Showing ${n.toLocaleString()} space${n === 1 ? '' : 's'}`;
+    if (!el) return;
+    if (Object.keys(activeFilters).length === 0) {
+      el.textContent = '';
+    } else {
+      el.textContent = `Showing ${n.toLocaleString()} space${n === 1 ? '' : 's'}`;
+    }
   }
 
   // ---------------------------------------------------------------------------
