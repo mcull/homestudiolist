@@ -528,13 +528,7 @@
 
   function updateCount(n) {
     const el = document.querySelector('#hsl-filter-ui .hsl-filter-count');
-    if (!el) return;
-    if (Object.keys(activeFilters).length === 0) {
-      el.style.display = 'none';
-    } else {
-      el.style.display = '';
-      el.textContent = `Showing ${n.toLocaleString()} space${n === 1 ? '' : 's'}`;
-    }
+    if (el) el.textContent = `Showing ${n.toLocaleString()} space${n === 1 ? '' : 's'}`;
   }
 
   // ---------------------------------------------------------------------------
@@ -594,7 +588,7 @@
     ui.innerHTML = `
       <div class="hsl-filters"></div>
       <div class="hsl-filter-footer">
-        <span class="hsl-filter-count" style="display:none"></span>
+        <span class="hsl-filter-count">Loading spaces...</span>
         <button class="hsl-filter-clear" type="button">Clear all filters</button>
       </div>
     `;
