@@ -78,7 +78,6 @@ function normalizeRecord(record) {
     rooms: splitCSV(f['Web Filter Rooms']),
     pets: splitCSV(f['Web Filter Pets']),
     availability: splitCSV(f['Availability']),
-    requests_2025: parseInt(f['2025 Requests – Submitted'], 10) || 0,
   };
 }
 
@@ -103,7 +102,6 @@ async function fetchAirtableListings() {
     'Web Filter Location', 'Web Filter Rooms', 'Web Filter Price',
     'Web Filter Boudoir Friendly', 'Web Filter Pets',
     'Web Filter Parking', 'Web Filter Max Team Size',
-    '2025 Requests – Submitted',
   ];
 
   const fieldParams = fields.map(f => `fields[]=${encodeURIComponent(f)}`).join('&');
@@ -212,12 +210,8 @@ export default async function handler(req, res) {
           };
         })
         .filter(l => l.id !== null)
-        // Newest publish date first, then by 2025 requests descending
-        .sort((a, b) => {
-          const pubDiff = b.publish_on - a.publish_on;
-          if (pubDiff !== 0) return pubDiff;
-          return b.requests_2025 - a.requests_2025;
-        });
+        // Newest publish date first; listings not in Squarespace fall to the end
+        .sort((a, b) => b.publish_on - a.publish_on);
 
       cache = {
         data: { listings, meta: { total: listings.length, generated_at: new Date().toISOString() } },
